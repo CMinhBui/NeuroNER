@@ -60,6 +60,44 @@ class Dataset(object):
             f.close()
         return labels, tokens, token_count, label_count, character_count
 
+    def _new_parse_dataset(self, token_list):
+        token_count = collections.defaultdict(lambda: 0)
+        label_count = collections.defaultdict(lambda: 0)
+        character_count = collections.defaultdict(lambda: 0)
+
+        line_count = -1
+        tokens = []
+        labels = []
+        new_token_sequence = []
+        new_label_sequence = []
+
+        for _token in token_list:
+            line_count += 1
+            if _token == 'end_sentence' :
+                if len(new_token_sequence) > 0:
+                    labels.append(new_label_sequence)
+                    tokens.append(new_token_sequence)
+                    new_token_sequence = []
+                    new_label_sequence = []
+                continue
+            token= str(_token[0])
+            label = 'O'
+            token_count[token] += 1
+            label_count[label] += 1
+
+            new_token_sequence.append(token)
+            new_label_sequence.append(label)
+
+            for character in token:
+                character_count[character] += 1
+
+            if self.debug and line_count > 200: break# for debugging purposes
+
+        if len(new_token_sequence) > 0:
+            labels.append(new_label_sequence)
+            tokens.append(new_token_sequence)
+        return labels, tokens, token_count, label_count, character_count
+
 
     def _convert_to_indices(self, dataset_types):
         tokens = self.tokens
@@ -131,6 +169,18 @@ class Dataset(object):
             self.labels[dataset_type], self.tokens[dataset_type], _, _, _ = self._parse_dataset(dataset_filepaths.get(dataset_type, None))
         
         token_indices, label_indices, character_indices_padded, character_indices, token_lengths, characters, label_vector_indices = self._convert_to_indices(dataset_types)
+        
+        self.token_indices.update(token_indices)
+        self.label_indices.update(label_indices)
+        self.character_indices_padded.update(character_indices_padded)
+        self.character_indices.update(character_indices)
+        self.token_lengths.update(token_lengths)
+        self.characters.update(characters)
+        self.label_vector_indices.update(label_vector_indices)
+
+    def new_update_dataset(self, token_list):
+        self.labels['deploy'], self.tokens['deploy'], _, _, _ = self._new_parse_dataset(token_list)
+        token_indices, label_indices, character_indices_padded, character_indices, token_lengths, characters, label_vector_indices = self._convert_to_indices(['deploy'])
         
         self.token_indices.update(token_indices)
         self.label_indices.update(label_indices)

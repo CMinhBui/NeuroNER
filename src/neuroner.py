@@ -478,6 +478,45 @@ class NeuroNER(object):
         text2, entities = brat_to_conll.get_entities_from_brat(text_filepath, annotation_filepath, verbose=True)
         assert(text == text2)
         return entities
+
+    def new_predict(self, text, core_nlp):
+        token_list = brat_to_conll.brat_to_conll_to_memory(text, core_nlp)
+        self.dataset.new_update_dataset(token_list)
+        predicted_token_list = train.new_prediction_step(self.sess, self.dataset, self.model, self.transition_params_trained, self.prediction_count, self.parameters, token_list)
+        return self.output(predicted_token_list, text)
+
+    def output(self, predicted_token_list, text):
+
+        result = ''
+        previous_end = -1
+        for predicted_token in predicted_token_list:
+
+            if predicted_token == 'end_sentence':
+                continue
+            word = str(predicted_token[0])
+            start = int(predicted_token[1])
+            end = int(predicted_token[2])
+            label = str(predicted_token[-1])
+            original_word = ''
+            if start == previous_end:
+                result = result[:len(result) - 1]
+            for index in range(start, end):
+                original_word += text[index]
+            assert(original_word == word), 'Word Error ' + original_word + ' ' + word
+            try:
+                original_word += '/' + self.trim_label(label) + text[end]
+            except:
+                original_word += '/' + self.trim_label(label)
+            result += original_word
+            original_word = ''
+            previous_end = end
+
+        return result
+
+    def trim_label(self, label):
+        if not label == 'O':
+            return label[2:]
+        return label
     
     def get_params(self):
         return self.parameters

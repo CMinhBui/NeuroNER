@@ -99,6 +99,59 @@ def prediction_step(sess, dataset, dataset_type, model, transition_params_traine
 
     return all_predictions, all_y_true, output_filepath
 
+def new_prediction_step(sess, dataset, model, transition_params_trained, epoch_number, parameters, original_token_list):
+    
+    print('Predict labels for the deploy set')
+    
+    all_predictions = []
+    all_y_true = []
+    
+    # if dataset_type == 'deploy': print('/train.py: prepare to predict', end_timer - start_timer)
+
+    predicted_token_list = []
+    token_index = 0;
+    for i in range(len(dataset.token_indices['deploy'])):
+        start_timer = time.time()
+        feed_dict = {
+          model.input_token_indices: dataset.token_indices['deploy'][i],
+          model.input_token_character_indices: dataset.character_indices_padded['deploy'][i],
+          model.input_token_lengths: dataset.token_lengths['deploy'][i],
+          model.input_label_indices_vector: dataset.label_vector_indices['deploy'][i],
+          model.dropout_keep_prob: 1.
+        }
+        unary_scores, predictions = sess.run([model.unary_scores, model.predictions], feed_dict)
+        if parameters['use_crf']:
+            predictions, _ = tf.contrib.crf.viterbi_decode(unary_scores, transition_params_trained)
+            predictions = predictions[1:-1]
+        else:
+            predictions = predictions.tolist()
+
+        assert(len(predictions) == len(dataset.tokens['deploy'][i]))
+
+        output_string = ''
+        prediction_labels = [dataset.index_to_label[prediction] for prediction in predictions]
+        gold_labels = dataset.labels['deploy'][i]
+        if parameters['tagging_format'] == 'bioes':
+            prediction_labels = utils_nlp.bioes_to_bio(prediction_labels)
+            gold_labels = utils_nlp.bioes_to_bio(gold_labels)
+        
+        for prediction, token, gold_label in zip(prediction_labels, dataset.tokens['deploy'][i], gold_labels):
+            while (token_index < len(original_token_list)):
+                original_token = original_token_list[token_index]
+                if original_token == 'end_sentence':
+                    token_index += 1
+                    continue
+                else:
+                    original_text = original_token[0]
+                    gold_label_original = 'O'
+                    assert(token == original_text and gold_label == gold_label_original) 
+                    token_index += 1
+                    break            
+            predicted_token_list.append((original_token[0], original_token[1], original_token[2], prediction))
+        predicted_token_list.append('end_sentence')
+
+    return predicted_token_list
+
 
 def predict_labels(sess, model, transition_params_trained, parameters, dataset, epoch_number, stats_graph_folder, dataset_filepaths):
     # Predict labels using trained model

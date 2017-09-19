@@ -187,3 +187,13 @@ def brat_to_conll(input_folder, output_filepath, tokenizer, language):
         del spacy_nlp
     elif tokenizer == 'stanford':
         del core_nlp
+
+def brat_to_conll_to_memory(text, spacy_nlp):
+    output_text = []
+
+    sentences = get_sentences_and_tokens_from_spacy(text, spacy_nlp)
+    for sentence in sentences: 
+        for token in sentence:
+            output_text.append((token['text'], token['start'], token['end']))
+        output_text.append('end_sentence')
+    return output_text
